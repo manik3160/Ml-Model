@@ -1,0 +1,14 @@
+# Content Monitoring ML Model API Configuration
+# Copy this file to .env.local and update the values
+
+# ML Model API URL (update this for production)
+NEXT_PUBLIC_ML_API_URL=http://localhost:5001/api
+
+# Optional: Custom configuration
+# NEXT_PUBLIC_ML_API_URL=https://your-ml-api-domain.com/api
+
+# Optional: API timeout (in milliseconds)
+# NEXT_PUBLIC_API_TIMEOUT=10000
+
+# Optional: Enable debug mode
+# NEXT_PUBLIC_DEBUG=true
