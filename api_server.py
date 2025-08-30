@@ -269,6 +269,69 @@ def manage_restricted_words():
         logger.error(f"Error managing restricted words: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/restricted-words/update-from-api', methods=['POST'])
+def update_restricted_words_from_api():
+    """Update restricted words by testing against the Bad Words API"""
+    try:
+        if pipeline is None:
+            if not initialize_pipeline():
+                return jsonify({'error': 'ML Pipeline not available'}), 500
+        
+        data = request.json or {}
+        words_to_test = data.get('words_to_test', None)
+        
+        # Update restricted words from API
+        api_confirmed_words = pipeline.text_monitor.update_restricted_words_from_api(words_to_test)
+        
+        return jsonify({
+            'message': 'Restricted words updated from Bad Words API',
+            'api_confirmed_words': list(api_confirmed_words) if api_confirmed_words else [],
+            'total_count': len(pipeline.text_monitor.restricted_words),
+            'method': 'api_enhanced'
+        })
+    
+    except Exception as e:
+        logger.error(f"Error updating restricted words from API: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/check-text-with-api', methods=['POST'])
+def check_text_with_api():
+    """Check text content using the Bad Words API for enhanced validation"""
+    try:
+        if pipeline is None:
+            if not initialize_pipeline():
+                return jsonify({'error': 'ML Pipeline not available'}), 500
+        
+        data = request.json
+        if not data or 'text' not in data:
+            return jsonify({'error': 'Text content is required'}), 400
+        
+        text_content = data.get('text', '')
+        user_id = data.get('user_id', None)
+        
+        # Use API-enhanced text checking
+        result = pipeline.text_monitor.check_text_with_api(text_content)
+        
+        # Add user context if provided
+        if user_id:
+            result['user_id'] = user_id
+        
+        # Format response similar to main content check
+        if result.get('combined_decision', False):
+            result['action'] = 'block'
+            result['message'] = 'Content blocked due to policy violation'
+            result['overall_decision'] = 'unsafe'
+        else:
+            result['action'] = 'allow'
+            result['message'] = 'Content approved'
+            result['overall_decision'] = 'safe'
+        
+        return jsonify(result)
+    
+    except Exception as e:
+        logger.error(f"Error in API-enhanced text check: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({'error': 'Endpoint not found'}), 404
@@ -291,6 +354,8 @@ if __name__ == '__main__':
         logger.info("  PUT  /api/config            - Update configuration")
         logger.info("  GET  /api/restricted-words  - Get restricted words")
         logger.info("  POST /api/restricted-words  - Add restricted words")
+        logger.info("  POST /api/restricted-words/update-from-api - Update from Bad Words API")
+        logger.info("  POST /api/check-text-with-api - Enhanced text check with API")
         
         # Start the server
         app.run(

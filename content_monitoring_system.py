@@ -22,6 +22,7 @@ import warnings
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional, Union
 import logging
+import requests
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings('ignore')
@@ -39,21 +40,31 @@ class TextContentMonitor:
         self.tokenizer = None
         self.max_length = max_length
         self.categories = ['safe', 'inappropriate', 'hate_speech', 'violence', 'spam']
+        self.bad_words_api_key = "kADcC1YMTjR636KcjnMVtdQ2l4yewM2J"
+        self.bad_words_api_url = "https://api.api-ninjas.com/v1/profanityfilter"
         
     def load_restricted_words(self, file_path: Optional[str] = None) -> None:
-        """Load restricted words from file or use default list"""
+        """Load restricted words from Bad Words API or file"""
         if file_path and os.path.exists(file_path):
             with open(file_path, 'r') as f:
                 self.restricted_words = set(line.strip().lower() for line in f)
+            logger.info(f"Loaded {len(self.restricted_words)} restricted words from file")
         else:
-            # Default restricted words (customize as needed)
-            self.restricted_words = {
-                'hate', 'violence', 'abuse', 'harassment', 'discrimination',
-                'racism', 'sexism', 'homophobia', 'bullying', 'threats',
-                'illegal', 'drugs', 'weapons', 'terrorism', 'extremism',
-                'spam', 'scam', 'fake_news', 'misinformation'
-            }
-        logger.info(f"Loaded {len(self.restricted_words)} restricted words")
+            # Try to fetch from Bad Words API first
+            api_words = self._fetch_bad_words_from_api()
+            if api_words:
+                self.restricted_words = api_words
+                logger.info(f"Loaded {len(self.restricted_words)} restricted words from Bad Words API")
+            else:
+                # Fallback to default restricted words
+                self.restricted_words = {
+                    'hate', 'violence', 'abuse', 'harassment', 'discrimination',
+                    'racism', 'sexism', 'homophobia', 'bullying', 'threats',
+                    'illegal', 'drugs', 'weapons', 'terrorism', 'extremism',
+                    'spam', 'scam', 'fake_news', 'misinformation'
+                }
+                logger.info(f"Loaded {len(self.restricted_words)} default restricted words")
+        
     
     def simple_word_check(self, text: str) -> Dict:
         """Simple word-based content check"""
@@ -164,6 +175,111 @@ class TextContentMonitor:
             logger.info(f"Text model loaded from {filepath}")
         else:
             logger.warning(f"Model file {filepath} not found")
+
+    def _test_word_with_api(self, word: str) -> bool:
+        """Test if a word is considered inappropriate using the Bad Words API"""
+        try:
+            headers = {
+                'X-Api-Key': self.bad_words_api_key
+            }
+            
+            params = {
+                'text': word
+            }
+            
+            response = requests.get(
+                self.bad_words_api_url,
+                headers=headers,
+                params=params,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                # The API returns whether the text contains profanity
+                return data.get('has_profanity', False)
+            else:
+                logger.warning(f"API request failed with status {response.status_code}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error testing word with API: {e}")
+            return False
+    
+    def update_restricted_words_from_api(self, words_to_test: List[str] = None) -> None:
+        """Dynamically update restricted words by testing against the Bad Words API"""
+        if words_to_test is None:
+            # Test a comprehensive list of potentially inappropriate words
+            words_to_test = [
+                'abuse', 'ass', 'asshole', 'bastard', 'bitch', 'bloody', 'cock', 'crap', 'cunt',
+                'knife' , 'murder' , 'kill' , 'suicide' , 'death' , 'hate' , 'violence' , 'abuse' , 'harassment' , 'discrimination' , 'racism' , 'sexism' , 'homophobia' , 'bullying' , 'threats' , 'illegal' , 'drugs' , 'weapons' , 'terrorism' , 'extremism' , 'spam' , 'scam' , 'fake_news' , 'misinformation' , 'knife' , 'murder' , 'kill' , 'suicide' , 'death' , 'hate' , 'violence' , 'abuse' , 'harassment' , 'discrimination' , 'racism' , 'sexism' , 'homophobia' , 'bullying' , 'threats' , 'illegal' , 'drugs' , 'weapons' , 'terrorism' , 'extremism' , 'spam' , 'scam' , 'fake_news' , 'misinformation' ,
+                'damn', 'dick', 'fuck', 'fucker', 'fucking', 'hell', 'motherfucker', 'nigga',
+                'nigger', 'piss', 'pussy', 'shit', 'slut', 'whore', 'bastard', 'bollocks',
+                'bugger', 'chink', 'coon', 'dyke', 'fag', 'faggot', 'gook', 'kike', 'kraut',
+                'mick', 'paki', 'spic', 'wop', 'wog', 'yid', 'zipperhead', 'cholo', 'wetback',
+                'beaner', 'greaser', 'spic', 'taco', 'beaner', 'wetback', 'spic', 'greaser',
+                'taco', 'beaner', 'wetback', 'spic', 'greaser', 'taco', 'beaner', 'wetback',
+                'kill', 'suicide', 'murder', 'death', 'hate', 'violence', 'abuse', 'harassment',
+                'discrimination', 'racism', 'sexism', 'homophobia', 'bullying', 'threats',
+                'illegal', 'drugs', 'weapons', 'terrorism', 'extremism', 'spam', 'scam',
+                'fake_news', 'misinformation'
+            ]
+        
+        logger.info(f"Testing {len(words_to_test)} words against Bad Words API...")
+        
+        api_confirmed_words = set()
+        for word in words_to_test:
+            if self._test_word_with_api(word):
+                api_confirmed_words.add(word.lower())
+        
+        # Update the restricted words set
+        self.restricted_words.update(api_confirmed_words)
+        logger.info(f"Updated restricted words list. Total: {len(self.restricted_words)} words")
+        logger.info(f"API confirmed {len(api_confirmed_words)} words as inappropriate")
+        
+        return api_confirmed_words
+    
+    def check_text_with_api(self, text: str) -> Dict:
+        """Check text content using the Bad Words API for real-time validation"""
+        try:
+            headers = {
+                'X-Api-Key': self.bad_words_api_key
+            }
+            
+            params = {
+                'text': text
+            }
+            
+            response = requests.get(
+                self.bad_words_api_url,
+                headers=headers,
+                params=params,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                has_profanity = data.get('has_profanity', False)
+                
+                # Also do local word check for comparison
+                local_check = self.simple_word_check(text)
+                
+                return {
+                    'api_result': {
+                        'has_profanity': has_profanity,
+                        'api_confidence': 'high' if has_profanity else 'medium'
+                    },
+                    'local_check': local_check,
+                    'combined_decision': has_profanity or local_check['is_restricted'],
+                    'method': 'api_enhanced'
+                }
+            else:
+                logger.warning(f"API request failed, falling back to local check")
+                return self.simple_word_check(text)
+                
+        except Exception as e:
+            logger.error(f"Error checking text with API: {e}")
+            return self.simple_word_check(text)
 
 
 class ImageContentMonitor:
