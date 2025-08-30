@@ -2,6 +2,7 @@
 venv/lib
 env/
 ENV/
+venv
 .venv/
 .env/
 
