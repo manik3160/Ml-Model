@@ -1,5 +1,5 @@
 # Virtual Environment
-venv/
+venv/lib
 env/
 ENV/
 .venv/
