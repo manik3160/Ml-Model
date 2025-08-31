@@ -1,17 +1,4 @@
 #!/usr/bin/env python3
-"""
-Content Monitoring ML Model for Decentralized Social Media DApp
-
-This script implements a comprehensive content monitoring system using TensorFlow
-to ensure content safety without centralized moderation.
-
-Features:
-- Text classification for inappropriate content detection
-- Image classification for inappropriate image detection
-- Real-time content filtering
-- Customizable restricted word lists
-- Model training and evaluation
-"""
 
 import tensorflow as tf
 import numpy as np
@@ -175,6 +162,27 @@ class TextContentMonitor:
             logger.info(f"Text model loaded from {filepath}")
         else:
             logger.warning(f"Model file {filepath} not found")
+
+    def _fetch_bad_words_from_api(self) -> set:
+        """Fetch a list of bad words from the Bad Words API"""
+        try:
+            # For demonstration, return a basic set of common inappropriate words
+            # In production, you would make API calls to get comprehensive lists
+            basic_bad_words = {
+                'hate', 'violence', 'abuse', 'harassment', 'discrimination',
+                'racism', 'sexism', 'homophobia', 'bullying', 'threats',
+                'illegal', 'drugs', 'weapons', 'terrorism', 'extremism',
+                'spam', 'scam', 'fake_news', 'misinformation'
+            }
+            
+            # You can extend this by making actual API calls if needed
+            # For now, return the basic set to avoid API rate limits
+            logger.info("Using basic bad words list (API integration can be extended)")
+            return basic_bad_words
+            
+        except Exception as e:
+            logger.error(f"Error fetching bad words from API: {e}")
+            return set()
 
     def _test_word_with_api(self, word: str) -> bool:
         """Test if a word is considered inappropriate using the Bad Words API"""

@@ -6,7 +6,7 @@ This script tests the API endpoints to ensure they're working correctly
 with your ML model.
 """
 
-import requests
+import requests  
 import json
 import time
 
